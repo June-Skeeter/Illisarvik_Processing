@@ -9,16 +9,18 @@ from scipy.optimize import curve_fit
 
 
 class Compile:
-    def __init__(self,Flux_Path,Met,Soil,frequency = '30T'):
+    def __init__(self,Flux_Path,BL_Path,Met,Soil,frequency = '30T'):
         self.Fluxes = ['H','LE','co2_flux','ch4_flux']
         Flux = self.Format(pd.read_csv(Flux_Path,delimiter = ',',skiprows = 0,parse_dates={'datetime':[1,2]},header = 1,na_values = -9999),v=1,drop = [0,1])
         Met = self.Format(pd.read_csv(Met,delimiter = ',',skiprows = 1,parse_dates={'datetime':[0]},header = 0),v=2,drop = [0])
         Soil = self.Format(pd.read_csv(Soil,delimiter = ',',skiprows = 0,parse_dates={'datetime':[0]},header = 0),v=0,drop = [0])
+        BL = self.Format(pd.read_csv(BL_Path,delimiter = ',',skiprows = 0,header = 0),v=0,drop = [0])
 
         Soil = Soil.resample(frequency).mean()
+        Soil = Soil.interpolate('linear')
         Met = Met.resample(frequency).mean()
 
-        self.RawData = pd.concat([Flux,Met,Soil],axis = 1, join = 'outer')
+        self.RawData = pd.concat([Flux,Met,Soil,BL],axis = 1, join = 'outer')
         for var in self.Fluxes:
             self.RawData[var+'_drop'] = 0
         self.RawData['Minute'] = self.RawData.index.hour*60+self.RawData.index.minute
