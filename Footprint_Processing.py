@@ -34,8 +34,10 @@ class Calculate(object):
 		self.Image = self.Domain.read(1)
 		self.fp_params={'dx':dx,'nx':nx,'rs':rs}
 		self.Prog = prb.ProgressBar(self.Runs)
-		for code in self.Classes['Code']:
-			self.Data[self.Classes['Name'].loc[self.Classes['Code'] == i]]=0
+		for name in self.Classes['Name']:
+			# var = self.Classes['Name'].loc[self.Classes['Code'] == code].values[0]
+			# print(var)
+			self.Data[name]=0
 		self.Data['Uplands'] = 0
 		self.run()
 
@@ -50,6 +52,7 @@ class Calculate(object):
 			if self.Classes is not None:
 				self.intersect()
 			self.Prog.Update(i)
+		plt.scatter(self.Data['Uplands'],self.Data['fch4'])
 
 	def intersect(self):
 		Sum = 0
@@ -58,7 +61,8 @@ class Calculate(object):
 			Template[self.Image == code] = 1
 			Template*= self.fpf
 			Contribution = Template.sum()
-			self.Data[self.Classes['Name'].loc[self.Classes['Code'] == code].iloc[self.i] = Contribution
-			Sum += Contribution
-		self.Data['Uplands'].iloc[self.i] = 1- Sum
-		print(self.Data['Uplands'].iloc[self.i])
+			# Name = self.Classes['Name'].loc[self.Classes['Code'] == code].values[0]
+			Name = self.Classes['Name'].loc[self.Classes['Code'] == code].values[0]
+			self.Data.ix[self.i,Name] = Contribution
+		# 	Sum += Contribution
+		self.Data.ix[self.i,Name] = 1- Sum
