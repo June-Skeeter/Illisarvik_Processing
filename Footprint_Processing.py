@@ -10,6 +10,7 @@ from shapely.geometry import Point, Polygon, MultiPolygon, shape
 import rasterio
 from rasterio import features
 from rasterio.transform import from_origin
+from rasterio.plot import show
 
 from matplotlib import pyplot as plt
 from matplotlib.colors import Normalize
@@ -59,7 +60,7 @@ class Calculate(object):
 				self.Sum+= self.fpf
 			self.Prog.Update(i)
 			with rasterio.open(self.out_dir+'30min/'+str(Name)+'.tif','w',**self.raster_params) as out:
-				out.write(self.Sum,1)
+				out.write(self.fpf,1)
 		self.Sum/=i+1
 		Contours(self.out_dir,Sum = self.Sum,raster_params=self.raster_params)
 		# with rasterio.open(self.out_dir+'Climatology.tif','w',**self.raster_params) as out:
@@ -96,40 +97,46 @@ class Contours(object):
 	def Sum(self):		
 		for job in self.Jobs:
 			self.job = job
-			nj = True
+			nj = 0		
+			print(self.job+':')
+			self.Prog = prb.ProgressBar(self.Jobs[job].shape[0])
 			for date in self.Jobs[job]:
+				self.Prog.Update(nj)
 				Name = str(date).replace(' ','_').replace('-','').replace(':','')
 				with rasterio.open(self.RasterPath+'30min/'+Name+'.tif','r') as FP:
 					self.raster_params = FP.profile
 					del self.raster_params['transform']    ### Transfrorms will become irelivant in rio 1.0 - gets rid of future warning
 					Image = FP.read(1)
-					if nj == True:
+					if nj == 0:
 						self.Sum = Image
-						nj = True
 					else:
-						self.Sum == Image
+						self.Sum += Image
+					nj+=1
+			self.Sum/=nj
 			self.Write_Contour()
 
 	def Write_Contour(self):
 		with rasterio.open(self.RasterPath+self.job+'.tiff','w',**self.raster_params) as out:
 			out.write(self.Sum,1)
 			transform=out.transform
+
 		Copy = self.Sum.copy()
+
 		FlatCopy = np.sort(Copy.ravel())[::-1]
 		Cumsum = np.sort(Copy.ravel())[::-1].cumsum()
+
 		dx = self.raster_params['affine'][0]
 		d = {}
 		d['contour'] = []
 		geometry = list()
-		print(self.raster_params)
 		for r in self.r:
 			pct = FlatCopy[np.where(Cumsum < r)]
-			plt.figure()
 			Mask = self.Sum.copy()
 			Mask[Mask>=pct[-1]] = 1
 			Mask[Mask<pct[-1]] = np.nan
+			# plt.figure()
+			# plt.imshow(Mask)
 			multipart = 'No'
-			plt.imshow(Copy)
 			for shp, val in features.shapes(Mask.astype('int16'), transform=transform):
 				if val == 1:
 					d['contour'].append(r)
@@ -149,7 +156,7 @@ class Contours(object):
 
 		geo_df = gpd.GeoDataFrame(df,crs={'init': 'EPSG:32608'},geometry = geometry)
 		geo_df['area'] =  geo_df.area 
-		# geo_df.to_file(self.RasterPath+'Contours/'+self.job+'.shp', driver = 'ESRI Shapefile')
+		geo_df.to_file(self.RasterPath+'Contours/'+self.job+'.shp', driver = 'ESRI Shapefile')
 		if self.ax is not None:
 			geo_df.plot(facecolor='None',edgecolor='black',ax=self.ax)
 
