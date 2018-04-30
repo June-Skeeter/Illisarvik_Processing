@@ -31,15 +31,16 @@ class Calculate(object):
 		self.out_dir=out_dir
 		self.Runs = Data.shape[0]
 		self.Data = Data
-		self.Domain = rasterio.open(Domain,'r')
-		self.raster_params = self.Domain.profile
-		del self.raster_params['transform']    ### Transfrorms will become irelivant in rio 1.0 - gets rid of future warning
-		self.Image = self.Domain.read(1)
+		with rasterio.open(Domain,'r') as self.Domain:
+			self.raster_params = self.Domain.profile
+			del self.raster_params['transform']    ### Transfrorms will become irelivant in rio 1.0 - gets rid of future warning
+			self.Image = self.Domain.read(1)
 		self.fp_params={'dx':dx,'nx':nx,'rs':rs}
 		self.Prog = prb.ProgressBar(self.Runs)
+		self.Intersections = self.Data[['datetime']].copy()
 		for name in self.Classes['Name']:
-			self.Data[name]=0
-		self.Data['Uplands'] = 0
+			self.Intersections[name]=0.0
+		self.Intersections['Uplands'] = 0.0
 		self.run()
 
 	def run(self):
@@ -60,9 +61,9 @@ class Calculate(object):
 			with rasterio.open(self.out_dir+'30min/'+str(Name)+'.tif','w',**self.raster_params) as out:
 				out.write(self.Sum,1)
 		self.Sum/=i+1
-		with rasterio.open(self.out_dir+'Climatology.tif','w',**self.raster_params) as out:
-			out.write(self.Sum,1)
-		return(self.Data)
+		Contours(self.out_dir,Sum = self.Sum,raster_params=self.raster_params)
+		# with rasterio.open(self.out_dir+'Climatology.tif','w',**self.raster_params) as out:
+		# 	out.write(self.Sum,1)
 
 	def intersect(self):
 		Sum = 0
@@ -72,5 +73,84 @@ class Calculate(object):
 			Template*= self.fpf
 			Contribution = Template.sum()
 			Name = self.Classes['Name'].loc[self.Classes['Code'] == code].values[0]
-			self.Data.ix[self.i,Name] = Contribution
-		self.Data.ix[self.i,Name] = 1- Sum
+			self.Intersections.ix[self.i,Name] = Contribution
+			Sum+=Contribution
+		self.Intersections.ix[self.i,'Uplands'] = 1.0 - Sum
+
+class Contours(object):
+	"""docstring for ClassName"""
+	def __init__(self,RasterPath,Sum=None,raster_params=None,Jobs=None,r=[.25,.50,.70,.80,.90],ax=None):
+		super(Contours, self).__init__()
+		self.RasterPath=RasterPath
+		self.raster_params=raster_params
+		self.r = r
+		self.ax=ax
+		if Sum is not None:
+			self.Sum = Sum
+			self.job = 'Climatology'
+			self.Write_Contour()
+		elif Jobs is not None:
+			self.Jobs = Jobs
+			self.Sum()
+
+	def Sum(self):		
+		for job in self.Jobs:
+			self.job = job
+			nj = True
+			for date in self.Jobs[job]:
+				Name = str(date).replace(' ','_').replace('-','').replace(':','')
+				with rasterio.open(self.RasterPath+'30min/'+Name+'.tif','r') as FP:
+					self.raster_params = FP.profile
+					del self.raster_params['transform']    ### Transfrorms will become irelivant in rio 1.0 - gets rid of future warning
+					Image = FP.read(1)
+					if nj == True:
+						self.Sum = Image
+						nj = True
+					else:
+						self.Sum == Image
+			self.Write_Contour()
+
+	def Write_Contour(self):
+		with rasterio.open(self.RasterPath+self.job+'.tiff','w',**self.raster_params) as out:
+			out.write(self.Sum,1)
+			transform=out.transform
+		Copy = self.Sum.copy()
+		FlatCopy = np.sort(Copy.ravel())[::-1]
+		Cumsum = np.sort(Copy.ravel())[::-1].cumsum()
+		dx = self.raster_params['affine'][0]
+		d = {}
+		d['contour'] = []
+		geometry = list()
+		print(self.raster_params)
+		for r in self.r:
+			pct = FlatCopy[np.where(Cumsum < r)]
+			plt.figure()
+			Mask = self.Sum.copy()
+			Mask[Mask>=pct[-1]] = 1
+			Mask[Mask<pct[-1]] = np.nan
+			multipart = 'No'
+			plt.imshow(Copy)
+			for shp, val in features.shapes(Mask.astype('int16'), transform=transform):
+				if val == 1:
+					d['contour'].append(r)
+					Poly = shape(shp)
+					Poly = Poly.buffer(dx, join_style=1).buffer(-dx, join_style=1)
+					Poly = Poly.buffer(-dx, join_style=1).buffer(dx, join_style=1)
+					if multipart == 'No':
+						geometry.append(Poly)
+					else:
+						Multi = []
+						for part in geometry[-1]:
+							Multi.append(part)
+						Multi.append(Poly)
+						geometry[-1]=MulitPolygon(Multi)
+					mulitpart = 'Yes'
+		df = pd.DataFrame(data=d)
+
+		geo_df = gpd.GeoDataFrame(df,crs={'init': 'EPSG:32608'},geometry = geometry)
+		geo_df['area'] =  geo_df.area 
+		# geo_df.to_file(self.RasterPath+'Contours/'+self.job+'.shp', driver = 'ESRI Shapefile')
+		if self.ax is not None:
+			geo_df.plot(facecolor='None',edgecolor='black',ax=self.ax)
+
+		
