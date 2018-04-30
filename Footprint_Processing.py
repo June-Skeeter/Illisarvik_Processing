@@ -25,18 +25,18 @@ from Klujn_2015_FootprinModel.calc_footprint_FFP_climatology_SkeeterEdits import
 
 class Calculate(object):
 	"""docstring for Calculate"""
-	def __init__(self,Data,Domain,XY,Classes=None,nx=1000,dx=1,rs=[50,75,90]):
+	def __init__(self,out_dir,Data,Domain,XY,Classes=None,nx=1000,dx=1,rs=[50,75,90]):
 		super(Calculate, self).__init__()
 		self.Classes=Classes
+		self.out_dir=out_dir
 		self.Runs = Data.shape[0]
 		self.Data = Data
 		self.Domain = rasterio.open(Domain,'r')
+		print(self.Domain.profile)
 		self.Image = self.Domain.read(1)
 		self.fp_params={'dx':dx,'nx':nx,'rs':rs}
 		self.Prog = prb.ProgressBar(self.Runs)
 		for name in self.Classes['Name']:
-			# var = self.Classes['Name'].loc[self.Classes['Code'] == code].values[0]
-			# print(var)
 			self.Data[name]=0
 		self.Data['Uplands'] = 0
 		self.run()
@@ -51,8 +51,15 @@ class Calculate(object):
 			self.fpf /= self.fpf.sum()    ## Normalize by the domain!
 			if self.Classes is not None:
 				self.intersect()
+			if i == 0:
+				self.Sum = self.fpf
+			else:
+				self.Sum+= self.fpf
 			self.Prog.Update(i)
-		plt.scatter(self.Data['Uplands'],self.Data['fch4'])
+		self.Sum/=i+1
+		with rasterio.open(self.out_dir+'Climatology.tif','w',**self.Domain.profile) as out:
+			out.write(self.Sum,1)
+		return(self.Data)
 
 	def intersect(self):
 		Sum = 0
@@ -61,8 +68,6 @@ class Calculate(object):
 			Template[self.Image == code] = 1
 			Template*= self.fpf
 			Contribution = Template.sum()
-			# Name = self.Classes['Name'].loc[self.Classes['Code'] == code].values[0]
 			Name = self.Classes['Name'].loc[self.Classes['Code'] == code].values[0]
 			self.Data.ix[self.i,Name] = Contribution
-		# 	Sum += Contribution
 		self.Data.ix[self.i,Name] = 1- Sum
