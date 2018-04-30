@@ -32,7 +32,8 @@ class Calculate(object):
 		self.Runs = Data.shape[0]
 		self.Data = Data
 		self.Domain = rasterio.open(Domain,'r')
-		print(self.Domain.profile)
+		self.raster_params = self.Domain.profile
+		del self.raster_params['transform']    ### Transfrorms will become irelivant in rio 1.0 - gets rid of future warning
 		self.Image = self.Domain.read(1)
 		self.fp_params={'dx':dx,'nx':nx,'rs':rs}
 		self.Prog = prb.ProgressBar(self.Runs)
@@ -56,8 +57,10 @@ class Calculate(object):
 			else:
 				self.Sum+= self.fpf
 			self.Prog.Update(i)
+			with rasterio.open(self.out_dir+'30min/'+str(Name)+'.tif','w',**self.raster_params) as out:
+				out.write(self.Sum,1)
 		self.Sum/=i+1
-		with rasterio.open(self.out_dir+'Climatology.tif','w',**self.Domain.profile) as out:
+		with rasterio.open(self.out_dir+'Climatology.tif','w',**self.raster_params) as out:
 			out.write(self.Sum,1)
 		return(self.Data)
 
