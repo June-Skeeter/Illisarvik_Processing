@@ -1,6 +1,6 @@
 
 import sys
-
+from pathlib import Path
 import numpy as np
 import pandas as pd
 import geopandas as gpd
@@ -103,15 +103,19 @@ class Contours(object):
 			for date in self.Jobs[job]:
 				self.Prog.Update(nj)
 				Name = str(date).replace(' ','_').replace('-','').replace(':','')
-				with rasterio.open(self.RasterPath+'30min/'+Name+'.tif','r') as FP:
-					self.raster_params = FP.profile
-					del self.raster_params['transform']    ### Transfrorms will become irelivant in rio 1.0 - gets rid of future warning
-					Image = FP.read(1)
-					if nj == 0:
-						self.Sum = Image
-					else:
-						self.Sum += Image
-					nj+=1
+				my_file = Path("/path/to/file")
+				try:
+					with rasterio.open(self.RasterPath+'30min/'+Name+'.tif','r') as FP:
+						self.raster_params = FP.profile
+						del self.raster_params['transform']    ### Transfrorms will become irelivant in rio 1.0 - gets rid of future warning
+						Image = FP.read(1)
+						if nj == 0:
+							self.Sum = Image
+						else:
+							self.Sum += Image
+						nj+=1
+				except:
+					pass
 			self.Sum/=nj
 			self.Write_Contour()
 
