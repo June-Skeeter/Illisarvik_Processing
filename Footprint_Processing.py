@@ -26,22 +26,25 @@ from Klujn_2015_FootprinModel.calc_footprint_FFP_climatology_SkeeterEdits import
 
 class Calculate(object):
 	"""docstring for Calculate"""
-	def __init__(self,out_dir,Data,Domain,XY,Classes=None,nx=1000,dx=1,rs=[50,75,90]):
+	def __init__(self,out_dir,Data,Domain,XY,Name='Name',Code='Code',Classes=None,nx=1000,dx=1,rs=[50,75,90]):
 		super(Calculate, self).__init__()
 		self.Classes=Classes
 		self.out_dir=out_dir
 		self.Runs = Data.shape[0]
 		self.Data = Data
+		self.Code=Code
+		self.Name=Name
 		with rasterio.open(Domain,'r') as self.Domain:
 			self.raster_params = self.Domain.profile
 			del self.raster_params['transform']    ### Transfrorms will become irelivant in rio 1.0 - gets rid of future warning
 			self.Image = self.Domain.read(1)
 		self.fp_params={'dx':dx,'nx':nx,'rs':rs}
 		self.Prog = prb.ProgressBar(self.Runs)
-		self.Intersections = self.Data[['datetime']].copy()
-		for name in self.Classes['Name']:
-			self.Intersections[name]=0.0
-		self.Intersections['Uplands'] = 0.0
+		if self.Classes is not None:
+			self.Intersections = self.Data[['datetime']].copy()
+			for name in self.Classes[Name]:
+				self.Intersections[name]=0.0
+			self.Intersections['Uplands'] = 0.0
 		self.run()
 
 	def run(self):
@@ -68,13 +71,13 @@ class Calculate(object):
 
 	def intersect(self):
 		Sum = 0
-		for code in self.Classes['Code']:
+		for code in self.Classes[self.Code]:
 			Template = self.Image*0
 			Template[self.Image == code] = 1
 			Template*= self.fpf
 			Contribution = Template.sum()
-			Name = self.Classes['Name'].loc[self.Classes['Code'] == code].values[0]
-			self.Intersections.ix[self.i,Name] = Contribution
+			name = self.Classes[self.Name].loc[self.Classes[self.Code] == code].values[0]
+			self.Intersections.ix[self.i,name] = Contribution
 			Sum+=Contribution
 		self.Intersections.ix[self.i,'Uplands'] = 1.0 - Sum
 
@@ -138,30 +141,35 @@ class Contours(object):
 			Mask = self.Sum.copy()
 			Mask[Mask>=pct[-1]] = 1
 			Mask[Mask<pct[-1]] = np.nan
-			# plt.figure()
-			# plt.imshow(Mask)
 			multipart = 'No'
 			for shp, val in features.shapes(Mask.astype('int16'), transform=transform):
 				if val == 1:
-					d['contour'].append(r)
 					Poly = shape(shp)
 					Poly = Poly.buffer(dx, join_style=1).buffer(-dx, join_style=1)
 					Poly = Poly.buffer(-dx, join_style=1).buffer(dx, join_style=1)
-					if multipart == 'No':
-						geometry.append(Poly)
-					else:
-						Multi = []
-						for part in geometry[-1]:
-							Multi.append(part)
-						Multi.append(Poly)
-						geometry[-1]=MulitPolygon(Multi)
-					mulitpart = 'Yes'
+					if Poly.is_empty == False:
+						if multipart == 'No':
+							geometry.append(Poly)
+							d['contour'].append(r)
+						else:
+							Multi = []
+							for part in geometry[-1]:
+								Multi.append(part)
+							Multi.append(Poly)
+							d['contour'].append(r)
+							geometry[-1]=MulitPolygon(Multi)
+						# multipart = 'Yes' ## Was a typo .. but it worked with and doesn't with out ... not sure why!
 		df = pd.DataFrame(data=d)
 
 		geo_df = gpd.GeoDataFrame(df,crs={'init': 'EPSG:32608'},geometry = geometry)
 		geo_df['area'] =  geo_df.area 
 		geo_df.to_file(self.RasterPath+'Contours/'+self.job+'.shp', driver = 'ESRI Shapefile')
 		if self.ax is not None:
-			geo_df.plot(facecolor='None',edgecolor='black',ax=self.ax)
+			c = np.random.rand(3,)
+			geo_df.plot(facecolor='None',edgecolor=c,ax=self.ax,linewidth=4)
+			plt.plot(np.nan,np.nan,color = c,label = self.job)
+
+		else:
+			geo_df.plot(facecolor='None',edgecolor=np.random.rand(3,),label = self.job)
 
 		

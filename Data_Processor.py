@@ -12,6 +12,10 @@ class Compile:
     def __init__(self,Flux_Path,BL_Path,Met,Soil,frequency = '30T'):
         self.Fluxes = ['H','LE','co2_flux','ch4_flux']
         Flux = self.Format(pd.read_csv(Flux_Path,delimiter = ',',skiprows = 0,parse_dates={'datetime':[1,2]},header = 1,na_values = -9999),v=1,drop = [0,1])
+        Flux_Meta = self.Format(pd.read_csv(Flux_Path.replace('full_output','metadata'),delimiter = ',',parse_dates={'datetime':[1,2]},header = 0,na_values = -9999),v=0,drop = [0,1])
+        Flux['canopy_height'] = Flux_Meta['canopy_height']
+        Flux['Zm'] = Flux_Meta['master_sonic_height']
+
         Met = self.Format(pd.read_csv(Met,delimiter = ',',skiprows = 1,parse_dates={'datetime':[0]},header = 0),v=2,drop = [0])
         Soil = self.Format(pd.read_csv(Soil,delimiter = ',',skiprows = 0,parse_dates={'datetime':[0]},header = 0),v=0,drop = [0])
         BL = self.Format(pd.read_csv(BL_Path,delimiter = ',',skiprows = 0,header = 0),v=0,drop = [0])
@@ -34,7 +38,10 @@ class Compile:
         df = df.ix[v:]
         df = df.set_index(pd.DatetimeIndex(df.datetime))
         df = df.drop(df.columns[drop],axis=1)
-        df = df.astype(float)
+        try:
+            df = df.astype(float)
+        except:
+            pass
         return(df)
     
     def Date_Drop(self,Date,Vars):
