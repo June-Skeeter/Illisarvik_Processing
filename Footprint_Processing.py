@@ -41,29 +41,31 @@ class Calculate(object):
 		self.fp_params={'dx':dx,'nx':nx,'rs':rs}
 		self.Prog = prb.ProgressBar(self.Runs)
 		if self.Classes is not None:
-			self.Intersections = self.Data[['datetime']].copy()
+			# self.Intersections = self.Data[['datetime']].copy()
 			for name in self.Classes[Name]:
-				self.Intersections[name]=0.0
-			self.Intersections['Uplands'] = 0.0
+				self.Data[name] = np.nan
+			self.Data['Sum'] = np.nan
 		self.run()
 
 	def run(self):
 		for i in range(self.Runs):
 			self.i=i
-			Name = str(self.Data['datetime'].iloc[i]).replace(' ','_').replace('-','').replace(':','')
-			FP = FFP_climatology(zm=[self.Data['Zm'].iloc[i]],z0=[self.Data['Zo'].iloc[i]],h=[self.Data['PBLH'].iloc[i]],ol=[self.Data['L'].iloc[i]],
-				sigmav=[self.Data['v_var'].iloc[i]],ustar=[self.Data['u*'].iloc[i]],wind_dir=[self.Data['wind_dir'].iloc[i]],**self.fp_params,)
-			self.fpf = np.flipud(FP['fclim_2d'])*self.fp_params['dx']**2
-			self.fpf /= self.fpf.sum()    ## Normalize by the domain!
-			if self.Classes is not None:
-				self.intersect()
-			if i == 0:
-				self.Sum = self.fpf
-			else:
-				self.Sum+= self.fpf
-			self.Prog.Update(i)
-			with rasterio.open(self.out_dir+'30min/'+str(Name)+'.tif','w',**self.raster_params) as out:
-				out.write(self.fpf,1)
+			if self.Data['Run'].iloc[i] == 1:
+				Name = str(self.Data['datetime'].iloc[i]).replace(' ','_').replace('-','').replace(':','')
+				FP = FFP_climatology(zm=[self.Data['Zm'].iloc[i]],z0=[self.Data['Zo'].iloc[i]],h=[self.Data['PBLH'].iloc[i]],ol=[self.Data['L'].iloc[i]],
+					sigmav=[self.Data['v_var'].iloc[i]],ustar=[self.Data['u*'].iloc[i]],wind_dir=[self.Data['wind_dir'].iloc[i]],**self.fp_params,)
+				self.fpf = np.flipud(FP['fclim_2d'])*self.fp_params['dx']**2
+				# self.fpf /= self.fpf.sum()    ## Normalize by the domain!
+				if self.Classes is not None:
+					self.intersect()
+				try:
+					self.Sum+= self.fpf
+				except:
+					self.Sum = self.fpf
+					pass
+				self.Prog.Update(i)
+				with rasterio.open(self.out_dir+'30min/'+str(Name)+'.tif','w',**self.raster_params) as out:
+					out.write(self.fpf,1)
 		self.Sum/=i+1
 		Contours(self.out_dir,Sum = self.Sum,raster_params=self.raster_params)
 		# with rasterio.open(self.out_dir+'Climatology.tif','w',**self.raster_params) as out:
@@ -71,15 +73,15 @@ class Calculate(object):
 
 	def intersect(self):
 		Sum = 0
-		for code in self.Classes[self.Code]:
+		for code in self.Classes[self.Code].unique():
 			Template = self.Image*0
 			Template[self.Image == code] = 1
 			Template*= self.fpf
 			Contribution = Template.sum()
 			name = self.Classes[self.Name].loc[self.Classes[self.Code] == code].values[0]
-			self.Intersections.ix[self.i,name] = Contribution
+			self.Data.ix[self.i,name] = Contribution
 			Sum+=Contribution
-		self.Intersections.ix[self.i,'Uplands'] = 1.0 - Sum
+		self.Data.ix[self.i,'Sum'] = Sum
 
 class Contours(object):
 	"""docstring for ClassName"""
