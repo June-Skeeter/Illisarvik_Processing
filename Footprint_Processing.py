@@ -36,7 +36,7 @@ class Calculate(object):
 		self.Name=Name
 		with rasterio.open(Domain,'r') as self.Domain:
 			self.raster_params = self.Domain.profile
-			del self.raster_params['transform']    ### Transfrorms will become irelivant in rio 1.0 - gets rid of future warning
+			# del self.raster_params['transform']    ### Transfrorms will become irelivant in rio 1.0 - gets rid of future warning
 			self.Image = self.Domain.read(1)
 		self.fp_params={'dx':dx,'nx':nx,'rs':rs}
 		self.Prog = prb.ProgressBar(self.Runs)
@@ -48,6 +48,7 @@ class Calculate(object):
 		self.run()
 
 	def run(self):
+		n = 0
 		for i in range(self.Runs):
 			self.i=i
 			if self.Data['Run'].iloc[i] == 1:
@@ -66,7 +67,8 @@ class Calculate(object):
 				self.Prog.Update(i)
 				with rasterio.open(self.out_dir+'30min/'+str(Name)+'.tif','w',**self.raster_params) as out:
 					out.write(self.fpf,1)
-		self.Sum/=i+1
+				n +=1
+		self.Sum/=n
 		Contours(self.out_dir,Sum = self.Sum,raster_params=self.raster_params)
 		# with rasterio.open(self.out_dir+'Climatology.tif','w',**self.raster_params) as out:
 		# 	out.write(self.Sum,1)
@@ -122,6 +124,7 @@ class Contours(object):
 				except:
 					pass
 			self.Sum/=nj
+			self.nj = nj
 			self.Write_Contour()
 
 	def Write_Contour(self):
@@ -133,8 +136,10 @@ class Contours(object):
 
 		FlatCopy = np.sort(Copy.ravel())[::-1]
 		Cumsum = np.sort(Copy.ravel())[::-1].cumsum()
-
-		dx = self.raster_params['affine'][0]
+		print(Cumsum.sum(),FlatCopy.sum())
+		print(self.raster_params)
+		dx = self.raster_params['transform'][0]
+		# dx = self.fp_params['dx']
 		d = {}
 		d['contour'] = []
 		geometry = list()

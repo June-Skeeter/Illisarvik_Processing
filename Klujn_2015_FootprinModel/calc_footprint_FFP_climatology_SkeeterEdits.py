@@ -480,11 +480,25 @@ def get_contour_levels(f, dx, dy, rs=None):
     return [(round(r, 3), ar, pclev) for r, ar, pclev in zip(rs, ars, pclevs)]
 
 #===============================================================================
+
+## _cntr is depreciated, writing a patch using the contours package
 def get_contour_vertices(x, y, f, lev,r):
     import numpy as np
-    import matplotlib._cntr as cntr
-    c = cntr.Cntr(x, y, f)
-    nlist = c.trace(lev, lev, 0)
+    # import matplotlib._cntr as cntr
+
+    from contours.core import shapely_formatter as shapely_fmt
+    from contours.quad import QuadContourGenerator
+    # print(x,y)
+    x = x[1,:]
+    y = y[::-1,1]
+    # print(x,y)
+    # print()
+    # c = cntr.Cntr(x, y, f)
+    Bmat = 1-f
+    c = QuadContourGenerator.from_rectilinear(y, x, Bmat, shapely_fmt)
+    nlist = c.filled_contour(min=1-lev, max=None)
+    # nlist = c.trace(lev, lev, 0)
+    # print(nlist)
     segs = nlist[:len(nlist)//2]
     xr = []
     yr = []
